@@ -1,6 +1,7 @@
 // Task Manager API - Entry Point
 // Sets up middleware, routes, and error handling
 
+require("dotenv").config();
 const express = require("express");
 const app = express();
 const morgan = require("morgan");
