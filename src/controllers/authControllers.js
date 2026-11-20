@@ -1,3 +1,4 @@
+import pool from "../database/db.js";
 const bcrypt = require("bcrypt");
 const users = require("../../users.json");
 
@@ -82,6 +83,7 @@ const login = async (req, res, next) => {
         const isMatch = await VerifyPassword(pass, user.pass);
 
         if (isMatch) {
+            req.session.userId = user.id;
             res.status(200).json({
                 message: "Login succesfull",
             });
@@ -93,6 +95,19 @@ const login = async (req, res, next) => {
     } catch (error) {
         return next(error);
     }
+};
+
+const verify = async (req, res) => {
+    if (!req.session.userId) {
+        return res.status(400).json({
+            authenticated: false,
+        });
+    }
+
+    return res.status(200).json({
+        authenticated: true,
+        userId: req.session.userId,
+    });
 };
 
 module.exports = {
