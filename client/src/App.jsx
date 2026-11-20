@@ -1,12 +1,14 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useState, useEffect } from "react";
+
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import ProtectedRoute from "./components/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
+
+import ProtectedRoute from "./components/ProtectedRoute";
 import Navbar from "./components/Navbar";
 import LayoutWrapper from "./components/LayoutWrapper";
-import { useState, useEffect } from "react";
 
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -15,31 +17,31 @@ function App() {
     useEffect(() => {
         const verifyUser = async () => {
             try {
-                const response = await fetch("api/v1/auth/verify");
+                const response = await fetch("/api/v1/auth/verify", {
+                    credentials: "include",
+                });
 
-                if (response.ok) {
-                    setIsAuthenticated(true);
-                } else {
-                    setIsAuthenticated(false);
-                }
+                setIsAuthenticated(response.ok);
             } catch (error) {
+                console.error("Authentication verification failed:", error);
                 setIsAuthenticated(false);
             } finally {
                 setIsLoading(false);
             }
         };
+
         verifyUser();
-    });
+    }, []);
 
     return (
         <BrowserRouter>
             <LayoutWrapper>
                 <Navbar />
+
                 <main className="mt-10">
                     <Routes>
                         <Route path="/login" element={<Login />} />
                         <Route path="/register" element={<Register />} />
-                        <Route path="/dash" element={<Dashboard />} />
 
                         <Route
                             element={
@@ -50,8 +52,9 @@ function App() {
                             }
                         >
                             <Route path="/" element={<Home />} />
+                            <Route path="/dash" element={<Dashboard />} />
                         </Route>
-                    </Routes>{" "}
+                    </Routes>
                 </main>
             </LayoutWrapper>
         </BrowserRouter>
