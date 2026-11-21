@@ -1,31 +1,35 @@
-import pool from "../database/db.js";
-import {
-    validStatuses,
+const pool = require("../database/db.js");
+const {
+    validateName,
     validateDate,
+    validateStatus,
     validateID,
-} from "../validators/taskValidators.js";
-
-const allowedFields = ["name", "status", "due_date"];
+} = require("../validators/taskValidators.js");
+const allowedFields = ["name", "status", "description", "due_date"];
 
 // Creates new task and adds it to in-memory array
 const createTask = async (req, res) => {
     try {
-        const { name, status, description } = req.body;
-        let { due_date } = req.body;
+        let { name, status, description, due_date } = req.body;
         const user_id = req.user.id;
 
-        console.log("POST /", req.body);
-
-        if (!name || typeof name !== "string" || name.trim().length === 0) {
-            return res.status(400).json({ message: "Task name is invalid." });
-        }
-
-        if (!validStatuses.includes(status)) {
+        const nameValidation = validateName(name);
+        if (!nameValidation.valid) {
             return res.status(400).json({
-                message:
-                    "Please enter valid status(pending, in-progress, completed)",
+                message: nameValidation.message,
             });
         }
+
+        name = nameValidation.value;
+
+        const statusValidation = validateStatus(status);
+        if (!statusValidation.valid) {
+            return res.status(400).json({
+                message: statusValidation.message,
+            });
+        }
+
+        status = statusValidation.value;
 
         if (typeof description !== "string") {
             return res
@@ -34,13 +38,11 @@ const createTask = async (req, res) => {
         }
 
         const dateValidation = validateDate(due_date);
-
         if (!dateValidation.valid) {
             return res.status(400).json({
                 message: dateValidation.message,
             });
         }
-
         due_date = dateValidation.value;
 
         const normalizedName = name.trim();
@@ -77,7 +79,7 @@ const getTasks = async (req, res) => {
 //Fetches specific task found by id
 const getTasksbyID = async (req, res) => {
     try {
-        const { task_id } = req.params;
+        let { task_id } = req.params;
         const user_id = req.user.id;
 
         const idValidation = validateID(task_id);
@@ -87,12 +89,11 @@ const getTasksbyID = async (req, res) => {
                 message: idValidation.message,
             });
         }
-
-        const id = idValidation.value;
+        task_id = idValidation.value;
 
         const result = await pool.query(
             "SELECT id, name, description, status, due_date, created_at, last_modified FROM tasks WHERE id = $1 AND user_id = $2",
-            [id, user_id],
+            [task_id, user_id],
         );
 
         if (result.rowCount === 0) {
@@ -109,16 +110,17 @@ const getTasksbyID = async (req, res) => {
 // Updates the task
 const updateTask = async (req, res) => {
     try {
-        const { name, status, description } = req.body;
-        let { due_date } = req.body;
-        const { task_id } = req.params;
+        let { name, status, description, due_date } = req.body;
+        let { task_id } = req.params;
         const user_id = req.user.id;
 
-        if (!name || typeof name !== "string" || name.trim().length == 0) {
+        const nameValidation = validateName(name);
+        if (!nameValidation.valid) {
             return res.status(400).json({
-                message: "Task title is not valid",
+                message: nameValidation.message,
             });
         }
+        name = nameValidation.value;
 
         const idValidation = validateID(task_id);
         if (!idValidation.valid) {
@@ -126,15 +128,15 @@ const updateTask = async (req, res) => {
                 message: idValidation.message,
             });
         }
+        task_id = idValidation.value;
 
-        const id = idValidation.value;
-
-        if (!validStatuses.includes(status)) {
+        const statusValidation = validateStatus(status);
+        if (!statusValidation.valid) {
             return res.status(400).json({
-                message:
-                    "Invalid status inputed. Valid statuses are {pending, in-progress and completed}",
+                message: statusValidation.message,
             });
         }
+        status = statusValidation.value;
 
         if (typeof description !== "string") {
             return res
@@ -148,14 +150,13 @@ const updateTask = async (req, res) => {
                 message: dateValidation.message,
             });
         }
-
         due_date = dateValidation.value;
 
         const normalizedName = name.trim();
 
         const result = await pool.query(
             "UPDATE tasks SET name = $1, status = $2, description = $3, due_date = $4, last_modified = CURRENT_TIMESTAMP WHERE id = $5 AND user_id = $6 RETURNING *",
-            [normalizedName, status, description, due_date, id, user_id],
+            [normalizedName, status, description, due_date, task_id, user_id],
         );
 
         if (result.rowCount === 0) {
@@ -172,7 +173,7 @@ const updateTask = async (req, res) => {
 // Deletes the task by id
 const deleteTask = async (req, res) => {
     try {
-        const { task_id } = req.params;
+        let { task_id } = req.params;
         const user_id = req.user.id;
 
         const idValidation = validateID(task_id);
@@ -181,12 +182,11 @@ const deleteTask = async (req, res) => {
                 message: idValidation.message,
             });
         }
-
-        const id = idValidation.value;
+        task_id = idValidation.value;
 
         const result = await pool.query(
             "DELETE FROM tasks WHERE id = $1 AND user_id = $2 RETURNING *",
-            [id, user_id],
+            [task_id, user_id],
         );
 
         if (result.rowCount === 0) {
@@ -205,7 +205,7 @@ const deleteTask = async (req, res) => {
 const patchTask = async (req, res) => {
     try {
         const updates = req.body;
-        const { task_id } = req.params;
+        let { task_id } = req.params;
         const user_id = req.user.id;
         const fields = [];
         const values = [];
@@ -216,36 +216,50 @@ const patchTask = async (req, res) => {
                 .json({ message: "Invalid fields inputed for update." });
         }
 
+        if (Array.isArray(updates) || typeof updates !== "object") {
+            return res
+                .status(400)
+                .json({ message: "Updates must be json format {}" });
+        }
+
         const idValidation = validateID(task_id);
-        if (idValidation.valid) {
+        if (!idValidation.valid) {
             return res.status(400).json({
                 message: idValidation.message,
             });
         }
-
-        const id = idValidation.value;
+        task_id = idValidation.value;
 
         for (const [key, value] of Object.entries(updates)) {
             if (!allowedFields.includes(key)) {
                 return res.status(400).json({
                     message:
-                        "Invalid field inputed. Allowed fields (title, status, dueDate)",
+                        "Invalid field inputed. Allowed fields: name, status, description, due_date",
                 });
             }
-            let normalizedValue = value;
+            let finalValue = value;
             if (key === "name") {
                 if (typeof value !== "string" || value.trim().length === 0) {
                     return res
                         .status(400)
                         .json({ message: "Invalid task name or empty name" });
                 }
-                normalizedValue = value.trim();
+                finalValue = value.trim();
             } else if (key === "status") {
-                if (!validStatuses.includes(value)) {
+                const statusValidation = validateStatus(value);
+                if (!statusValidation.valid) {
                     return res
                         .status(400)
-                        .json({ message: "Invalid status value" });
+                        .json({ message: statusValidation.message });
                 }
+                finalValue = statusValidation.value;
+            } else if (key === "description") {
+                if (typeof value !== "string") {
+                    return res.status(400).json({
+                        message: "Invalid description, must be string.",
+                    });
+                }
+                finalValue = value.trim();
             } else if (key === "due_date") {
                 const dateValidation = validateDate(value);
                 if (!dateValidation.valid) {
@@ -253,10 +267,10 @@ const patchTask = async (req, res) => {
                         message: dateValidation.message,
                     });
                 }
-                value = dateValidation.value;
+                finalValue = dateValidation.value;
             }
             fields.push(key);
-            values.push(normalizedValue);
+            values.push(finalValue);
         }
 
         const fieldsResult = fields
@@ -277,9 +291,9 @@ const patchTask = async (req, res) => {
             userIndex +
             " RETURNING *";
 
-        const result = await pool.query(query, [...values, id, user_id]);
+        const result = await pool.query(query, [...values, task_id, user_id]);
 
-        if (result.rowCount == 0) {
+        if (result.rowCount === 0) {
             return res
                 .status(404)
                 .json({ message: "Task was not found for updating" });

@@ -46,7 +46,7 @@ app.use(
 );
 
 // Routes & Error Handling
-const taskRoutes = require("./routes/taskRoutes");
+const taskRoutes = require("./routes/taskRoutes.js");
 const authRoutes = require("./routes/authRoutes.js");
 const { timeStamp } = require("console");
 app.use("/api/v1/tasks", taskRoutes);

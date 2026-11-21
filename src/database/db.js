@@ -1,4 +1,4 @@
-import pg from "pg";
+const pg = require("pg");
 
 const { Pool } = pg;
 
@@ -10,4 +10,4 @@ const pool = new Pool({
     password: process.env.DB_PASSWORD,
 });
 
-export default pool;
+module.exports = { pool };

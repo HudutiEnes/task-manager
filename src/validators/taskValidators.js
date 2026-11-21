@@ -1,6 +1,6 @@
-export const validStatuses = ["pending", "in-progress", "completed"];
+const validStatuses = ["pending", "in-progress", "completed"];
 
-export function validateDate(due_date) {
+function validateDate(due_date) {
     if (due_date == null) {
         due_date = null;
     } else {
@@ -44,24 +44,65 @@ export function validateDate(due_date) {
     };
 }
 
-export function validateID(task_id) {
-    const id = Number(task_id);
+function validateID(task_id) {
+    if (/^[0-9]+$/.test(task_id)) {
+        const id = Number(task_id);
 
-    if (!task_id || !Number.isSafeInteger(id)) {
+        if (!task_id || !Number.isSafeInteger(id)) {
+            return {
+                valid: false,
+                message: "Invalid task ID.",
+            };
+        }
+
+        if (id <= 0) {
+            return {
+                valid: false,
+                message: "Invalid value of ID, must be positive.",
+            };
+        }
+        return {
+            valid: true,
+            value: id,
+        };
+    } else {
         return {
             valid: false,
-            message: "Invalid task ID.",
+            message: "Invalid ID type, must be integer",
         };
     }
+}
 
-    if (id <= 0) {
+function validateName(name) {
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
         return {
             valid: false,
-            message: "Invalid value of ID, must be positive.",
+            message: "Invalid task name, must be string and non-empty",
         };
     }
     return {
         valid: true,
-        value: id,
+        value: name,
     };
 }
+
+function validateStatus(status) {
+    if (!validStatuses.includes(status)) {
+        return {
+            valid: false,
+            message:
+                "Invalid status, valid statuses: pending, in-progress and completed.",
+        };
+    }
+    return {
+        valid: true,
+        value: status,
+    };
+}
+
+module.exports = {
+    validateName,
+    validateStatus,
+    validateDate,
+    validateID,
+};
