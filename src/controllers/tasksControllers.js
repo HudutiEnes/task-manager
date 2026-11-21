@@ -1,9 +1,9 @@
-tasks = require("../../tasks.json");
-import { use } from "react";
 import pool from "../database/db.js";
-
-// Validating the tasks status
-const validStatuses = ["pending", "in-progress", "completed"];
+import {
+    validStatuses,
+    validateDate,
+    validateID,
+} from "../validators/taskValidators.js";
 
 const allowedFields = ["name", "status", "due_date"];
 
@@ -33,38 +33,15 @@ const createTask = async (req, res) => {
                 .json({ message: "Description must be of type string" });
         }
 
-        if (due_date == null) {
-            due_date = null;
-        } else {
-            if (typeof due_date === "string") {
-                if (/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
-                    const [year, month, day] = due_date.split("-").map(Number);
-                    const date = new Date(year, month - 1, day);
+        const dateValidation = validateDate(due_date);
 
-                    if (date.getFullYear() !== year) {
-                        return res
-                            .status(400)
-                            .json({ message: "Invalid year in date." });
-                    } else if (date.getMonth() + 1 !== month) {
-                        return res.status(400).json({
-                            message: "Invalid month in date.",
-                        });
-                    } else if (date.getDate() !== day) {
-                        return res
-                            .status(400)
-                            .json({ message: "Invalid day in date." });
-                    }
-                } else {
-                    return res.status(400).json({
-                        message: "The date format is invalid.",
-                    });
-                }
-            } else {
-                return res.status(400).json({
-                    message: "Invalid type of the date",
-                });
-            }
+        if (!dateValidation.valid) {
+            return res.status(400).json({
+                message: dateValidation.message,
+            });
         }
+
+        due_date = dateValidation.value;
 
         const normalizedName = name.trim();
 
@@ -103,19 +80,15 @@ const getTasksbyID = async (req, res) => {
         const { task_id } = req.params;
         const user_id = req.user.id;
 
-        const id = Number(task_id);
+        const idValidation = validateID(task_id);
 
-        if (!Number.isSafeInteger(id)) {
-            return res
-                .status(400)
-                .json({ message: "Invalid type or range for the ID" });
+        if (!idValidation.valid) {
+            return res.status(400).json({
+                message: idValidation.message,
+            });
         }
 
-        if (id <= 0) {
-            return res
-                .status(400)
-                .json({ message: "ID should have positive value" });
-        }
+        const id = idValidation.value;
 
         const result = await pool.query(
             "SELECT id, name, description, status, due_date, created_at, last_modified FROM tasks WHERE id = $1 AND user_id = $2",
@@ -147,19 +120,14 @@ const updateTask = async (req, res) => {
             });
         }
 
-        const id = Number(task_id);
-
-        if (!Number.isSafeInteger(id)) {
-            return res
-                .status(400)
-                .json({ message: "Invalid ID type, should be integer" });
+        const idValidation = validateID(task_id);
+        if (!idValidation.valid) {
+            return res.status(400).json({
+                message: idValidation.message,
+            });
         }
 
-        if (id <= 0) {
-            return res
-                .status(400)
-                .json({ message: "ID should have positive value" });
-        }
+        const id = idValidation.value;
 
         if (!validStatuses.includes(status)) {
             return res.status(400).json({
@@ -174,38 +142,14 @@ const updateTask = async (req, res) => {
                 .json({ message: "Description must be of string type" });
         }
 
-        if (due_date == null) {
-            due_date = null;
-        } else {
-            if (typeof due_date === "string") {
-                if (/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
-                    const [year, month, day] = due_date.split("-").map(Number);
-                    const date = new Date(year, month - 1, day);
-
-                    if (date.getFullYear() !== year) {
-                        return res
-                            .status(400)
-                            .json({ message: "Invalid year in date." });
-                    } else if (date.getMonth() + 1 !== month) {
-                        return res.status(400).json({
-                            message: "Invalid month in date.",
-                        });
-                    } else if (date.getDate() !== day) {
-                        return res
-                            .status(400)
-                            .json({ message: "Invalid day in date." });
-                    }
-                } else {
-                    return res.status(400).json({
-                        message: "The date format is invalid.",
-                    });
-                }
-            } else {
-                return res.status(400).json({
-                    message: "Invalid type of the date, must be string",
-                });
-            }
+        const dateValidation = validateDate(due_date);
+        if (!dateValidation.valid) {
+            return res.status(400).json({
+                message: dateValidation.message,
+            });
         }
+
+        due_date = dateValidation.value;
 
         const normalizedName = name.trim();
 
@@ -231,19 +175,14 @@ const deleteTask = async (req, res) => {
         const { task_id } = req.params;
         const user_id = req.user.id;
 
-        const id = Number(task_id);
-
-        if (!Number.isSafeInteger(id)) {
-            return res
-                .status(400)
-                .json({ message: "Invalid task ID inputed." });
+        const idValidation = validateID(task_id);
+        if (!idValidation.valid) {
+            return res.status(400).json({
+                message: idValidation.message,
+            });
         }
 
-        if (id <= 0) {
-            return res
-                .status(400)
-                .json({ message: "ID should have positive value" });
-        }
+        const id = idValidation.value;
 
         const result = await pool.query(
             "DELETE FROM tasks WHERE id = $1 AND user_id = $2 RETURNING *",
@@ -277,19 +216,14 @@ const patchTask = async (req, res) => {
                 .json({ message: "Invalid fields inputed for update." });
         }
 
-        const id = Number(task_id);
-
-        if (!task_id || !Number.isSafeInteger(id)) {
-            return res
-                .status(400)
-                .json({ message: "Invalid ID type or range." });
+        const idValidation = validateID(task_id);
+        if (idValidation.valid) {
+            return res.status(400).json({
+                message: idValidation.message,
+            });
         }
 
-        if (id <= 0) {
-            return res
-                .status(400)
-                .json({ message: "ID should have positive value." });
-        }
+        const id = idValidation.value;
 
         for (const [key, value] of Object.entries(updates)) {
             if (!allowedFields.includes(key)) {
@@ -313,40 +247,13 @@ const patchTask = async (req, res) => {
                         .json({ message: "Invalid status value" });
                 }
             } else if (key === "due_date") {
-                if (value == null) {
-                    value = null;
-                } else {
-                    if (typeof value === "string") {
-                        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                            const [year, month, day] = value
-                                .split("-")
-                                .map(Number);
-                            const date = new Date(year, month - 1, day);
-
-                            if (date.getFullYear() !== year) {
-                                return res
-                                    .status(400)
-                                    .json({ message: "Invalid year in date." });
-                            } else if (date.getMonth() + 1 !== month) {
-                                return res.status(400).json({
-                                    message: "Invalid month in date.",
-                                });
-                            } else if (date.getDate() !== day) {
-                                return res
-                                    .status(400)
-                                    .json({ message: "Invalid day in date." });
-                            }
-                        } else {
-                            return res.status(400).json({
-                                message: "The date format is invalid.",
-                            });
-                        }
-                    } else {
-                        return res.status(400).json({
-                            message: "Invalid type of the date",
-                        });
-                    }
+                const dateValidation = validateDate(value);
+                if (!dateValidation.valid) {
+                    return res.status(400).json({
+                        message: dateValidation.message,
+                    });
                 }
+                value = dateValidation.value;
             }
             fields.push(key);
             values.push(normalizedValue);
@@ -384,41 +291,6 @@ const patchTask = async (req, res) => {
         res.status(500).json({ message: "Database error" });
     }
 };
-
-function validateDate(due_date) {
-    if (due_date == null) {
-        due_date = null;
-    } else {
-        if (typeof due_date === "string") {
-            if (/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
-                const [year, month, day] = due_date.split("-").map(Number);
-                const date = new Date(year, month - 1, day);
-
-                if (date.getFullYear() !== year) {
-                    return res
-                        .status(400)
-                        .json({ message: "Invalid year in date." });
-                } else if (date.getMonth() + 1 !== month) {
-                    return res.status(400).json({
-                        message: "Invalid month in date.",
-                    });
-                } else if (date.getDate() !== day) {
-                    return res
-                        .status(400)
-                        .json({ message: "Invalid day in date." });
-                }
-            } else {
-                return res.status(400).json({
-                    message: "The date format is invalid.",
-                });
-            }
-        } else {
-            return res.status(400).json({
-                message: "Invalid type of the date, must be string",
-            });
-        }
-    }
-}
 
 module.exports = {
     getTasks,
