@@ -1,26 +1,76 @@
 tasks = require("../../tasks.json");
+import { use } from "react";
 import pool from "../database/db.js";
 
 // Validating the tasks status
 const validStatuses = ["pending", "in-progress", "completed"];
 
-const allowedFields = ["title", "status", "dueDate"];
+const allowedFields = ["name", "status", "due_date"];
 
 // Creates new task and adds it to in-memory array
-const createTask = async (req, res, next) => {
+const createTask = async (req, res) => {
     try {
-        const { title, status, description, dueDate } = req.body;
-        const userID = req.user.id;
+        const { name, status, description } = req.body;
+        let { due_date } = req.body;
+        const user_id = req.user.id;
 
         console.log("POST /", req.body);
 
-        if (!title || !status) {
-            return next(new Error("Title and Status are required"));
+        if (!name || typeof name !== "string" || name.trim().length === 0) {
+            return res.status(400).json({ message: "Task name is invalid." });
         }
 
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({
+                message:
+                    "Please enter valid status(pending, in-progress, completed)",
+            });
+        }
+
+        if (typeof description !== "string") {
+            return res
+                .status(400)
+                .json({ message: "Description must be of type string" });
+        }
+
+        if (due_date == null) {
+            due_date = null;
+        } else {
+            if (typeof due_date === "string") {
+                if (/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
+                    const [year, month, day] = due_date.split("-").map(Number);
+                    const date = new Date(year, month - 1, day);
+
+                    if (date.getFullYear() !== year) {
+                        return res
+                            .status(400)
+                            .json({ message: "Invalid year in date." });
+                    } else if (date.getMonth() + 1 !== month) {
+                        return res.status(400).json({
+                            message: "Invalid month in date.",
+                        });
+                    } else if (date.getDate() !== day) {
+                        return res
+                            .status(400)
+                            .json({ message: "Invalid day in date." });
+                    }
+                } else {
+                    return res.status(400).json({
+                        message: "The date format is invalid.",
+                    });
+                }
+            } else {
+                return res.status(400).json({
+                    message: "Invalid type of the date",
+                });
+            }
+        }
+
+        const normalizedName = name.trim();
+
         const result = await pool.query(
-            "INSERT INTO tasks (title, description, status, dueDate, userID) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-            [title, description, status, dueDate, userID],
+            "INSERT INTO tasks (name, description, status, due_date, user_id) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+            [normalizedName, description, status, due_date, user_id],
         );
 
         res.status(201).json(result.rows[0]);
@@ -33,14 +83,14 @@ const createTask = async (req, res, next) => {
 // Fetches all tasks from array
 const getTasks = async (req, res) => {
     try {
-        const userID = req.user.id;
+        const user_id = req.user.id;
 
         const result = await pool.query(
-            "SELECT id, title, description,status, dueDate, created_at, last_modified FROM tasks WHERE user_id = $1 ORDERED BY created_at DESC",
-            [userID],
+            "SELECT id, name, description, status, due_date, created_at, last_modified FROM tasks WHERE user_id = $1 ORDER BY created_at DESC",
+            [user_id],
         );
 
-        res.json(result.rows);
+        res.status(200).json(result.rows);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "Database error" });
@@ -50,15 +100,33 @@ const getTasks = async (req, res) => {
 //Fetches specific task found by id
 const getTasksbyID = async (req, res) => {
     try {
-        const { taskId } = req.params;
-        const userID = req.user.id;
+        const { task_id } = req.params;
+        const user_id = req.user.id;
+
+        const id = Number(task_id);
+
+        if (!Number.isSafeInteger(id)) {
+            return res
+                .status(400)
+                .json({ message: "Invalid type or range for the ID" });
+        }
+
+        if (id <= 0) {
+            return res
+                .status(400)
+                .json({ message: "ID should have positive value" });
+        }
 
         const result = await pool.query(
-            "SELECT name, description, status, due_date, created_at, last_modified FROM tasks WHERE id = $1 AND user_id = $2",
-            [taskId, userID],
+            "SELECT id, name, description, status, due_date, created_at, last_modified FROM tasks WHERE id = $1 AND user_id = $2",
+            [id, user_id],
         );
 
-        res.json(result.rows);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "The task was not found" });
+        }
+
+        res.status(200).json(result.rows[0]);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "Database error" });
@@ -68,22 +136,89 @@ const getTasksbyID = async (req, res) => {
 // Updates the task
 const updateTask = async (req, res) => {
     try {
-        const { title, status, dueDate } = req.body;
-        const { taskId } = req.params;
-        const userId = req.user.id;
+        const { name, status, description } = req.body;
+        let { due_date } = req.body;
+        const { task_id } = req.params;
+        const user_id = req.user.id;
 
-        if (!title.trim()) {
+        if (!name || typeof name !== "string" || name.trim().length == 0) {
             return res.status(400).json({
-                message: "Task title is required to update task",
+                message: "Task title is not valid",
             });
         }
 
+        const id = Number(task_id);
+
+        if (!Number.isSafeInteger(id)) {
+            return res
+                .status(400)
+                .json({ message: "Invalid ID type, should be integer" });
+        }
+
+        if (id <= 0) {
+            return res
+                .status(400)
+                .json({ message: "ID should have positive value" });
+        }
+
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({
+                message:
+                    "Invalid status inputed. Valid statuses are {pending, in-progress and completed}",
+            });
+        }
+
+        if (typeof description !== "string") {
+            return res
+                .status(400)
+                .json({ message: "Description must be of string type" });
+        }
+
+        if (due_date == null) {
+            due_date = null;
+        } else {
+            if (typeof due_date === "string") {
+                if (/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
+                    const [year, month, day] = due_date.split("-").map(Number);
+                    const date = new Date(year, month - 1, day);
+
+                    if (date.getFullYear() !== year) {
+                        return res
+                            .status(400)
+                            .json({ message: "Invalid year in date." });
+                    } else if (date.getMonth() + 1 !== month) {
+                        return res.status(400).json({
+                            message: "Invalid month in date.",
+                        });
+                    } else if (date.getDate() !== day) {
+                        return res
+                            .status(400)
+                            .json({ message: "Invalid day in date." });
+                    }
+                } else {
+                    return res.status(400).json({
+                        message: "The date format is invalid.",
+                    });
+                }
+            } else {
+                return res.status(400).json({
+                    message: "Invalid type of the date, must be string",
+                });
+            }
+        }
+
+        const normalizedName = name.trim();
+
         const result = await pool.query(
-            "UPDATE tasks SET name = $1, status = $2, dueDate = $3, last_modified = CURRENT_TIMESTAMP WHERE id = $4, user_id = $5 RETURNING *",
-            [title, status, dueDate, taskId, userId],
+            "UPDATE tasks SET name = $1, status = $2, description = $3, due_date = $4, last_modified = CURRENT_TIMESTAMP WHERE id = $5 AND user_id = $6 RETURNING *",
+            [normalizedName, status, description, due_date, id, user_id],
         );
 
-        res.status(200).json(result.rows[0]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "Task was not found" });
+        }
+
+        return res.status(200).json(result.rows[0]);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "Database error" });
@@ -93,15 +228,33 @@ const updateTask = async (req, res) => {
 // Deletes the task by id
 const deleteTask = async (req, res) => {
     try {
-        const { taskId } = req.params;
+        const { task_id } = req.params;
+        const user_id = req.user.id;
 
-        if (!taskId) {
-            return res.status(400).json({ message: "Task does not exist." });
+        const id = Number(task_id);
+
+        if (!Number.isSafeInteger(id)) {
+            return res
+                .status(400)
+                .json({ message: "Invalid task ID inputed." });
+        }
+
+        if (id <= 0) {
+            return res
+                .status(400)
+                .json({ message: "ID should have positive value" });
         }
 
         const result = await pool.query(
-            "DELETE FROM tasks WHERE id = $1 RETURNING *",
+            "DELETE FROM tasks WHERE id = $1 AND user_id = $2 RETURNING *",
+            [id, user_id],
         );
+
+        if (result.rowCount === 0) {
+            return res
+                .status(404)
+                .json({ message: "The task was not found to be deleted" });
+        }
 
         res.status(200).json(result.rows[0]);
     } catch (err) {
@@ -113,44 +266,117 @@ const deleteTask = async (req, res) => {
 const patchTask = async (req, res) => {
     try {
         const updates = req.body;
-        const { taskId } = req.params;
-        const names = [];
+        const { task_id } = req.params;
+        const user_id = req.user.id;
+        const fields = [];
         const values = [];
 
+        if (!updates || Object.keys(updates).length === 0) {
+            return res
+                .status(400)
+                .json({ message: "Invalid fields inputed for update." });
+        }
+
+        const id = Number(task_id);
+
+        if (!task_id || !Number.isSafeInteger(id)) {
+            return res
+                .status(400)
+                .json({ message: "Invalid ID type or range." });
+        }
+
+        if (id <= 0) {
+            return res
+                .status(400)
+                .json({ message: "ID should have positive value." });
+        }
+
         for (const [key, value] of Object.entries(updates)) {
-            if (allowedFields.includes(key)) {
-                names.push(key);
-                values.push(value);
-            } else {
+            if (!allowedFields.includes(key)) {
                 return res.status(400).json({
                     message:
-                        "Enter allowed fields (task name, task status, due date)",
+                        "Invalid field inputed. Allowed fields (title, status, dueDate)",
                 });
             }
+            let normalizedValue = value;
+            if (key === "name") {
+                if (typeof value !== "string" || value.trim().length === 0) {
+                    return res
+                        .status(400)
+                        .json({ message: "Invalid task name or empty name" });
+                }
+                normalizedValue = value.trim();
+            } else if (key === "status") {
+                if (!validStatuses.includes(value)) {
+                    return res
+                        .status(400)
+                        .json({ message: "Invalid status value" });
+                }
+            } else if (key === "due_date") {
+                if (value == null) {
+                    value = null;
+                } else {
+                    if (typeof value === "string") {
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                            const [year, month, day] = value
+                                .split("-")
+                                .map(Number);
+                            const date = new Date(year, month - 1, day);
+
+                            if (date.getFullYear() !== year) {
+                                return res
+                                    .status(400)
+                                    .json({ message: "Invalid year in date." });
+                            } else if (date.getMonth() + 1 !== month) {
+                                return res.status(400).json({
+                                    message: "Invalid month in date.",
+                                });
+                            } else if (date.getDate() !== day) {
+                                return res
+                                    .status(400)
+                                    .json({ message: "Invalid day in date." });
+                            }
+                        } else {
+                            return res.status(400).json({
+                                message: "The date format is invalid.",
+                            });
+                        }
+                    } else {
+                        return res.status(400).json({
+                            message: "Invalid type of the date",
+                        });
+                    }
+                }
+            }
+            fields.push(key);
+            values.push(normalizedValue);
         }
 
-        if (values.length === 0) {
-            return res.status(400).json({
-                message: "No fields provided for update.",
-            });
-        }
-
-        const namesResult = names
+        const fieldsResult = fields
             .map((name, index) => {
                 return name + " = " + "$" + (index + 1);
             })
             .join(", ");
 
         const IDindex = values.length + 1;
+        const userIndex = IDindex + 1;
 
         const query =
             "UPDATE tasks SET " +
-            namesResult +
+            fieldsResult +
             " WHERE id = $" +
             IDindex +
+            " AND user_id = $" +
+            userIndex +
             " RETURNING *";
 
-        const result = await pool.query(query, [...values, taskId]);
+        const result = await pool.query(query, [...values, id, user_id]);
+
+        if (result.rowCount == 0) {
+            return res
+                .status(404)
+                .json({ message: "Task was not found for updating" });
+        }
 
         return res.status(200).json(result.rows[0]);
     } catch (err) {
@@ -158,6 +384,41 @@ const patchTask = async (req, res) => {
         res.status(500).json({ message: "Database error" });
     }
 };
+
+function validateDate(due_date) {
+    if (due_date == null) {
+        due_date = null;
+    } else {
+        if (typeof due_date === "string") {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(due_date)) {
+                const [year, month, day] = due_date.split("-").map(Number);
+                const date = new Date(year, month - 1, day);
+
+                if (date.getFullYear() !== year) {
+                    return res
+                        .status(400)
+                        .json({ message: "Invalid year in date." });
+                } else if (date.getMonth() + 1 !== month) {
+                    return res.status(400).json({
+                        message: "Invalid month in date.",
+                    });
+                } else if (date.getDate() !== day) {
+                    return res
+                        .status(400)
+                        .json({ message: "Invalid day in date." });
+                }
+            } else {
+                return res.status(400).json({
+                    message: "The date format is invalid.",
+                });
+            }
+        } else {
+            return res.status(400).json({
+                message: "Invalid type of the date, must be string",
+            });
+        }
+    }
+}
 
 module.exports = {
     getTasks,
