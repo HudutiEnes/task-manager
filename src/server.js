@@ -9,9 +9,6 @@ const fs = require("fs");
 const path = require("path");
 const config = require("../config.json");
 
-// Setup the middleware to understand sessions
-import session from "express-session";
-
 // Setup the Log Stream
 const logDirectory = path.join(__dirname, "../logs/");
 
@@ -31,24 +28,9 @@ app.use(morgan("combined", { stream: accessLogStream }));
 // Keep short dev logs in terminal for live feedback
 app.use(morgan("dev"));
 
-app.use(
-    session({
-        secret: process.env.SESSION_SECRET,
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-            maxAge: 60 * 60 * 1000,
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-        },
-    }),
-);
-
 // Routes & Error Handling
 const taskRoutes = require("./routes/taskRoutes.js");
 const authRoutes = require("./routes/authRoutes.js");
-const { timeStamp } = require("console");
 app.use("/api/v1/tasks", taskRoutes);
 app.use("/api/v1/auth", authRoutes);
 
@@ -67,7 +49,7 @@ app.use((err, req, res, next) => {
     });
 });
 
-const PORT = config.port || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, () => {
     console.log(`Server is starting on port ${PORT}`);
 });

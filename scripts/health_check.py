@@ -1,51 +1,27 @@
 #!/usr/bin/env python3
-import json
+import os
 import requests
+from dotenv import load_dotenv
 
-with open("../config.json", "r") as f:
-    config = json.load(f)
+load_dotenv()
 
-url = f"http://localhost:{config['port']}/api/v1/tasks"
+port = os.getenv("PORT")
 
-app_config = {
-    "project_name": "task-manager-api",
-    "version": "1.0.0",
-    "env": "local",
-    "url": url,
-    "root_path": "../",
-}
+try:
+    url = f"http://localhost:{port}/health"
 
-endpoints = ["/", "/tasks", "/non-existent"]
+    print(f"Checking API health at: {url}...")
+    response = requests.get(url, timeout=5)
 
-
-def auditor(url, route):
-    full_path = f"{url}{route}"
-    # In future i add 'requests.get()' call
-    print(f"Checking: {full_path}")
-
-    if route == "/":
-        return {"route": route, "status": "SUCCESS"}
+    if response.status_code == 200:
+        print("SUCCESS: API is reachable and healthy.")
     else:
-        return {"route": route, "status": "FAIL"}
-
-
-report_summary = []
-
-for route in endpoints:
-    result = auditor(app_config["url"], route)
-    report_summary.append(result)
-
-
-print("--- TASK MANAGER API HEALTH REPORT ---")
-
-
-for result in report_summary:
-    route_name = result["route"]
-    status_val = result["status"]
-
-    print(f"Route is: {route_name}")
-
-    if status_val == "SUCCESS":
-        print(f"PASS: {route_name} is active.")
-    else:
-        print(f"FAIL: {route_name} is pending or missing.")
+        print(f"WARNING: API returned status code {response.status_code}")
+except FileNotFoundError:
+    print("CRITICAL: .env not found.")
+except requests.exceptions.ConnectionError:
+    print("CRITICAL: Could not connect to server. Is Node.js running?")
+except Exception as e:
+    print(f"ANOMALY: An unexpected error occurred: {e}")
+finally:
+    print("--- System Check Finished ---")
