@@ -1,114 +1,171 @@
-import pool from "../database/db.js";
+const pool = require("../database/db.js");
 const bcrypt = require("bcrypt");
-const users = require("../../users.json");
+const { validateName } = require("../validators/taskValidators.js");
+const { createAccessToken } = require("../utils/tokenUtils.js");
 
 const SALT_ROUNDS = 11;
 
 const register = async (req, res, next) => {
-    const { name, pass, email } = req.body;
+    try {
+        if (
+            !req.body ||
+            typeof req.body !== "object" ||
+            Array.isArray(req.body)
+        ) {
+            return res.status(400).json({ message: "Invalid request body." });
+        }
 
-    // Checking if user inputed required fields to register
-    if (!name || !pass || !email) {
-        return next(new Error("Please input required fields"));
+        const { name, pass, email } = req.body;
+
+        // Checking if user inputed required fields to register
+        if (!name || !pass || !email) {
+            return res.status(400).json({ message: "Invalid input fields." });
+        }
+
+        const nameValidator = validateName(name);
+        if (!nameValidator.valid) {
+            return res.status(400).json({ message: nameValidator.message });
+        }
+        const validName = nameValidator.value;
+
+        if (validName.length > 30) {
+            return res.status(400).json({ message: "Invalid user name." });
+        }
+
+        if (typeof email != "string") {
+            return res
+                .status(400)
+                .json({ message: "Email must be string format." });
+        }
+
+        const normalizedEmail = email.trim().toLowerCase();
+
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalizedEmail)) {
+            return res
+                .status(400)
+                .json({ message: "Email format not correct." });
+        }
+
+        if (normalizedEmail.length > 254) {
+            return res
+                .status(400)
+                .json({ message: "Email excedes character limit." });
+        }
+
+        if (typeof pass != "string") {
+            return res
+                .status(400)
+                .json({ message: "Invalid password type, must be string." });
+        }
+
+        // Checking if user inputed password with enough length
+        if (pass.length < 7) {
+            return res
+                .status(400)
+                .json({ message: "Password must have at least 7 letters." });
+        }
+
+        const existingUser = await pool.query(
+            "SELECT id FROM users WHERE email = $1",
+            [normalizedEmail],
+        );
+
+        if (existingUser.rowCount !== 0) {
+            return res.status(409).json({
+                message: "Account already exists",
+            });
+        }
+
+        const hashedPass = await bcrypt.hash(pass, SALT_ROUNDS);
+
+        const result = await pool.query(
+            "INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING name, email ",
+            [validName, normalizedEmail, hashedPass],
+        );
+
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        if (err.code == "23505" && err.constraint == "users_email_key") {
+            return res
+                .status(409)
+                .json({ message: "Email already exists in database." });
+        } else {
+            return next(err);
+        }
     }
-
-    if (typeof email != "string") {
-        return next(new Error("Please input valid email"));
-    }
-
-    if (typeof pass != "string") {
-        return next(new Error("Please input valid password"));
-    }
-
-    // Checking if user inputed password with enough length
-    if (pass.length < 7) {
-        return next(new Error("Please put password with 7 or more letters"));
-    }
-
-    const existingUser = users.find(
-        (u) => u.email === email.trim().toLowerCase(),
-    );
-
-    if (existingUser) {
-        res.status(409).json({
-            message: "Account with same email exists",
-        });
-        return;
-    } else {
-        const newUser = {
-            name,
-            pass: await bcrypt.hash(pass, SALT_ROUNDS),
-            email: email.trim().toLowerCase(),
-        };
-
-        users.push(newUser);
-    }
-    res.status(201).json({
-        message: "User added succesfully",
-    });
 };
 
 const login = async (req, res, next) => {
-    const { email, pass } = req.body;
-
-    //Checking if user inputed both required fields
-    if (!email || !pass) {
-        return next(new Error("Please input email and password."));
-    }
-
-    if (typeof email != "string") {
-        return next(new Error("Please input valid email"));
-    }
-
-    if (typeof pass != "string") {
-        return next(new Error("Please input valid password"));
-    }
-
-    // Normalizing email to lowercase to match with database email
-    const normalizeEmail = email.trim().toLowerCase();
-
-    // Checking if email in database is same with inputed email
-    const user = users.find((u) => u.email === normalizeEmail);
-
-    // Return error if user don't have account
-    if (!user) {
-        return next(new Error("Invalid try, please register first"));
-    }
-
-    function VerifyPassword(password, storedPassword) {
-        return bcrypt.compare(password, storedPassword);
-    }
-
     try {
-        const isMatch = await VerifyPassword(pass, user.pass);
+        if (
+            !req.body ||
+            typeof req.body !== "object" ||
+            Array.isArray(req.body)
+        ) {
+            return res.status(400).json({ message: "Invalid request body." });
+        }
 
-        if (isMatch) {
-            req.session.userId = user.id;
-            res.status(200).json({
-                message: "Login succesfull",
-            });
-        } else {
-            res.status(401).json({
-                message: "Wrong password",
+        const { email, pass } = req.body;
+
+        //Checking if user inputed both required fields
+        if (!email || !pass) {
+            return res.status(400).json({ message: "No fields inputed." });
+        }
+        if (typeof email != "string") {
+            return res.status(400).json({ message: "Email must be string." });
+        }
+        const normalizedEmail = email.trim().toLowerCase();
+
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalizedEmail)) {
+            return res
+                .status(400)
+                .json({ message: "Invalid email type or format." });
+        }
+
+        if (normalizedEmail.length > 254) {
+            return res
+                .status(400)
+                .json({ message: "Email excedes length policy." });
+        }
+
+        if (typeof pass != "string") {
+            return res.status(400).json({ message: "Invalid password type." });
+        }
+
+        const existingUser = await pool.query(
+            "SELECT id, email, password_hash FROM users WHERE email = $1",
+            [normalizedEmail],
+        );
+
+        const user = existingUser.rows[0];
+
+        if (existingUser.rowCount === 0) {
+            return res.status(401).json({
+                message: "Invalid email or password.",
             });
         }
-    } catch (error) {
-        return next(error);
-    }
-};
 
-const verify = async (req, res) => {
-    if (!req.session.userId) {
-        return res.status(400).json({
-            authenticated: false,
+        const storedPassword = user.password_hash;
+
+        const isMatch = await bcrypt.compare(pass, storedPassword);
+        if (!isMatch) {
+            return res
+                .status(401)
+                .json({ message: "Invalid email or password." });
+        }
+
+        const token = createAccessToken(user.id);
+
+        return res.status(200).json({
+            message: "Login successful",
+            token: token,
         });
+    } catch (err) {
+        return next(err);
     }
-
-    return res.status(200).json({
-        authenticated: true,
-        userId: req.session.userId,
-    });
 };
+
+const verify = async (req, res) => {};
 
 module.exports = {
     register,
