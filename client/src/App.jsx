@@ -17,9 +17,23 @@ function App() {
     useEffect(() => {
         const verifyUser = async () => {
             try {
+                const token = sessionStorage.getItem("token");
+
+                if (!token) {
+                    setIsAuthenticated(false);
+                    setIsLoading(false);
+                    return;
+                }
+
                 const response = await fetch("/api/v1/auth/verify", {
-                    credentials: "include",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
                 });
+
+                if (response.status === 401) {
+                    sessionStorage.removeItem("token");
+                }
 
                 setIsAuthenticated(response.ok);
             } catch (error) {
@@ -40,7 +54,14 @@ function App() {
 
                 <main className="mt-10">
                     <Routes>
-                        <Route path="/login" element={<Login />} />
+                        <Route
+                            path="/login"
+                            element={
+                                <Login
+                                    setIsAuthenticated={setIsAuthenticated}
+                                />
+                            }
+                        />
                         <Route path="/register" element={<Register />} />
 
                         <Route
@@ -52,8 +73,14 @@ function App() {
                             }
                         >
                             <Route path="/" element={<Home />} />
-                            <Route path="/dash" element={<Dashboard />} />
+                            <Route path="/dashboard" element={<Dashboard />} />
                         </Route>
+                        <Route
+                            path="*"
+                            element={
+                                <p className="text-white">Page not found</p>
+                            }
+                        />
                     </Routes>
                 </main>
             </LayoutWrapper>

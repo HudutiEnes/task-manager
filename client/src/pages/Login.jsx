@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 
 const Login = ({ setIsAuthenticated }) => {
-    const [formData, setFormData] = useState({ username: "", password: "" });
+    const [formData, setFormData] = useState({ email: "", pass: "" });
     const [error, setError] = useState(null);
 
     const navigate = useNavigate();
@@ -22,14 +22,13 @@ const Login = ({ setIsAuthenticated }) => {
                 body: JSON.stringify(formData),
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || "Authentication failed");
-            }
-
             const data = await response.json();
 
-            localStorage.setItem("token", data.token);
+            if (!response.ok) {
+                throw new Error(data.message || "Login failed");
+            }
+
+            sessionStorage.setItem("token", data.token);
 
             setIsAuthenticated(true);
             navigate("/dashboard");
@@ -54,16 +53,16 @@ const Login = ({ setIsAuthenticated }) => {
 
                 <div className="mb-4">
                     <label className="block text-sm font-medium mb-1">
-                        Username
+                        Email
                     </label>
                     <input
                         type="text"
                         className="w-full p-2 bg-zinc-950 border border-zinc-800 rounded text-white"
-                        value={formData.username}
+                        value={formData.email}
                         onChange={(e) =>
                             setFormData({
                                 ...formData,
-                                username: e.target.value,
+                                email: e.target.value,
                             })
                         }
                         required
@@ -77,11 +76,11 @@ const Login = ({ setIsAuthenticated }) => {
                     <input
                         type="password"
                         className="w-full p-2  bg-zinc-950 border border-zinc-800 rounded text-white"
-                        value={formData.password}
+                        value={formData.pass}
                         onChange={(e) =>
                             setFormData({
                                 ...formData,
-                                password: e.target.value,
+                                pass: e.target.value,
                             })
                         }
                         required
