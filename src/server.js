@@ -7,7 +7,6 @@ const app = express();
 const morgan = require("morgan");
 const fs = require("fs");
 const path = require("path");
-const config = require("../config.json");
 
 // Setup the Log Stream
 const logDirectory = path.join(__dirname, "../logs/");

@@ -1,10 +1,11 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 const SECRET_KEY = process.env.JWT_SECRET;
 
 function createAccessToken(userID) {
     const payload = {
-        sub: userID,
+        sub: String(userID),
     };
 
     const options = {

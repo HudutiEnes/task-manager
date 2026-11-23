@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { authenticateToken } = require("../middleware/authMiddleware.js");
 
 const {
     getTasks,
@@ -9,6 +10,8 @@ const {
     deleteTask,
     patchTask,
 } = require("../controllers/tasksControllers");
+
+router.use(authenticateToken);
 
 router.get("/", getTasks);
 router.get("/:id", getTasksbyID);

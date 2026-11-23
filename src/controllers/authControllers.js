@@ -1,4 +1,4 @@
-const pool = require("../database/db.js");
+const { pool } = require("../database/db.js");
 const bcrypt = require("bcrypt");
 const { validateName } = require("../validators/taskValidators.js");
 const { createAccessToken } = require("../utils/tokenUtils.js");
@@ -16,6 +16,13 @@ const register = async (req, res, next) => {
         }
 
         const { name, pass, email } = req.body;
+
+        console.log("Registration fields:", {
+            hasName: Boolean(name),
+            hasPassword: Boolean(pass),
+            hasEmail: Boolean(email),
+            keys: Object.keys(req.body),
+        });
 
         // Checking if user inputed required fields to register
         if (!name || !pass || !email) {
@@ -165,9 +172,15 @@ const login = async (req, res, next) => {
     }
 };
 
-const verify = async (req, res) => {};
+const verify = async (req, res) => {
+    return res.status(200).json({
+        authenticated: true,
+        userId: user.id,
+    });
+};
 
 module.exports = {
     register,
     login,
+    verify,
 };
