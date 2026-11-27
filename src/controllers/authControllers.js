@@ -17,13 +17,6 @@ const register = async (req, res, next) => {
 
         const { name, pass, email } = req.body;
 
-        console.log("Registration fields:", {
-            hasName: Boolean(name),
-            hasPassword: Boolean(pass),
-            hasEmail: Boolean(email),
-            keys: Object.keys(req.body),
-        });
-
         // Checking if user inputed required fields to register
         if (!name || !pass || !email) {
             return res.status(400).json({ message: "Invalid input fields." });
@@ -175,7 +168,7 @@ const login = async (req, res, next) => {
 const verify = async (req, res) => {
     return res.status(200).json({
         authenticated: true,
-        userId: user.id,
+        userId: req.user.id,
     });
 };
 

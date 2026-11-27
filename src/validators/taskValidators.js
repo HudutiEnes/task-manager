@@ -45,16 +45,24 @@ function validateDate(due_date) {
 }
 
 function validateID(task_id) {
-    if (/^[0-9]+$/.test(task_id)) {
+    // Testing if the string holds a valid number
+    if (!/^[0-9]+$/.test(task_id)) {
+        return {
+            valid: false,
+            message: "Invalid ID type, must be integer",
+        };
+    } else {
         const id = Number(task_id);
 
-        if (!task_id || !Number.isSafeInteger(id)) {
+        // Rejecting absurd values and fractions
+        if (!Number.isSafeInteger(id)) {
             return {
                 valid: false,
                 message: "Invalid task ID.",
             };
         }
 
+        // Rejecting negative id values
         if (id <= 0) {
             return {
                 valid: false,
@@ -64,11 +72,6 @@ function validateID(task_id) {
         return {
             valid: true,
             value: id,
-        };
-    } else {
-        return {
-            valid: false,
-            message: "Invalid ID type, must be integer",
         };
     }
 }

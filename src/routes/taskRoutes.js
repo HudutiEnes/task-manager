@@ -14,10 +14,10 @@ const {
 router.use(authenticateToken);
 
 router.get("/", getTasks);
-router.get("/:id", getTasksbyID);
+router.get("/:task_id", getTasksbyID);
 router.post("/", createTask);
-router.put("/:id", updateTask);
-router.delete("/:id", deleteTask);
-router.patch("/:id", patchTask);
+router.put("/:task_id", updateTask);
+router.delete("/:task_id", deleteTask);
+router.patch("/:task_id", patchTask);
 
 module.exports = router;

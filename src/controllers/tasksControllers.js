@@ -114,6 +114,18 @@ const updateTask = async (req, res) => {
         let { task_id } = req.params;
         const user_id = req.user.id;
 
+        if (!req.body || Object.keys(req.body).length() === 0) {
+            return res.status(400).json({
+                message: "Invalid input for updating tasks",
+            });
+        }
+
+        if (Array.isArray(req.body) || typeof req.body !== "object") {
+            return res
+                .status(400)
+                .json({ message: "Updates must be json format {}" });
+        }
+
         const nameValidation = validateName(name);
         if (!nameValidation.valid) {
             return res.status(400).json({
